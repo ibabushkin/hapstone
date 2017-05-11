@@ -40,12 +40,13 @@ foreign import ccall "wrapper"
 
 -- | wrap a relatively safe function to get a callback
 -- "safe" in this context means that the buffer remains unmodified
-mkCallback :: Storable a => (Storable a => ([Word8], [Word8]) -> a -> IO CSize)
+mkCallback :: Storable a 
+           => (([Word8], [Word8]) -> a -> IO CSize)
            -> IO CsSkipdataCallback
 mkCallback = allocCallback . mkCallback'
 
 mkCallback' :: Storable a
-           => (Storable a => ([Word8], [Word8]) -> a -> IO CSize)
+           => (([Word8], [Word8]) -> a -> IO CSize)
            -> Ptr Word8 -> CSize -> CSize -> Ptr () -> IO CSize
 mkCallback' func ptr size off user_data = do
     buf <- splitAt (fromIntegral off) <$> peekArray (fromIntegral size) ptr

@@ -82,7 +82,6 @@ import Foreign.Ptr
 import Hapstone.Internal.Util
 import qualified Hapstone.Internal.Arm64 as Arm64
 import qualified Hapstone.Internal.Arm as Arm
-import qualified Hapstone.Internal.M68K as M68K
 import qualified Hapstone.Internal.Mips as Mips
 import qualified Hapstone.Internal.Ppc as Ppc
 import qualified Hapstone.Internal.Sparc as Sparc
@@ -179,8 +178,8 @@ data ArchInfo
 
 -- | instruction information
 data CsDetail = CsDetail
-    { regsRead :: [Word16] -- ^ registers read by this instruction
-    , regsWrite :: [Word16] -- ^ registers written by this instruction
+    { regsRead :: [Word8] -- ^ registers read by this instruction
+    , regsWrite :: [Word8] -- ^ registers written by this instruction
     , groups :: [Word8] -- ^ instruction groups this instruction belongs to
     , archInfo :: Maybe ArchInfo -- ^ (optional) architecture-specific info
     } deriving (Show, Eq)

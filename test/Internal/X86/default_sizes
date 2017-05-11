@@ -13,7 +13,7 @@ size:		32	1
 avx_bcast:	36	4
 avx_zero_opmask:40	1
 
-cs_x86:	432
+cs_x86:	424
 cs_x86		offset	size
 prefix:		0	4
 opcode:		4	4

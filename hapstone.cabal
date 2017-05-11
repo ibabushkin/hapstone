@@ -1,5 +1,5 @@
 name:                hapstone
-version:             0.2.0.1
+version:             0.3.0.0
 synopsis:            Capstone bindings for Haskell
 description:         Please see README.md
 homepage:            http://github.com/ibabushkin/hapstone
@@ -19,7 +19,6 @@ library
                        Hapstone.Internal.Util,
                        Hapstone.Internal.Arm64,
                        Hapstone.Internal.Arm,
-                       Hapstone.Internal.M68K,
                        Hapstone.Internal.Mips,
                        Hapstone.Internal.Ppc,
                        Hapstone.Internal.Sparc,
@@ -41,8 +40,6 @@ test-suite hapstone-test
                        Internal.Arm64.Default,
                        Internal.Arm.StorableSpec,
                        Internal.Arm.Default,
-                       Internal.M68K.StorableSpec,
-                       Internal.M68K.Default,
                        Internal.Mips.StorableSpec,
                        Internal.Mips.Default,
                        Internal.Ppc.StorableSpec,

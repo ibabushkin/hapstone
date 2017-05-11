@@ -64,21 +64,21 @@ getCsDetail = do
     -- space allocation
     ptr <- mallocArray (sizeOf csDetail) :: IO (Ptr Word8)
     -- regs_read
-    pokeArray (castPtr ptr :: Ptr Word16)
+    pokeArray (castPtr ptr :: Ptr Word8)
         [0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB]
     -- regs_read_count
-    pokeByteOff ptr 24 (12 :: Word8)
+    pokeByteOff ptr 12 (12 :: Word8)
     -- regs_write
-    pokeArray (plusPtr ptr 26 :: Ptr Word16)
+    pokeArray (plusPtr ptr 13 :: Ptr Word8)
         [ 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB
         , 0xC, 0xD, 0xE, 0xF, 0x0, 0x1, 0x2, 0x3
         ]
     -- regs_write_count
-    pokeByteOff ptr 66 (20 :: Word8)
+    pokeByteOff ptr 33 (20 :: Word8)
     -- groups
-    pokeArray (plusPtr ptr 67 :: Ptr Word8) [0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7]
+    pokeArray (plusPtr ptr 34 :: Ptr Word8) [0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7]
     -- groups_count
-    pokeByteOff ptr 75 (8 :: Word8)
+    pokeByteOff ptr 42 (8 :: Word8)
     peek (castPtr ptr) <* free ptr
 
 csDetail :: CsDetail

@@ -33,7 +33,7 @@ instance Arbitrary ArmVectordataType where
 
 instance Arbitrary ArmOpMemStruct where
     arbitrary = ArmOpMemStruct <$> arbitrary <*>
-        arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+        arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary CsArmOpValue where
     arbitrary = oneof

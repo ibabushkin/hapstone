@@ -15,3 +15,8 @@ To install the bindings, make sure `c2hs` is present on your system, as it
 is used to preprocess the bindings to Capstone. Obviously, Capstone needs
 to be installed as well. Then, you can simply pull the package from Hackage
 via `cabal` or manually.
+
+## Examples
+Please see the examples directory for more information on how to use Hapstone.
+
+In short, you must import `Hapstone.Capstone` and then call either `disasmIO` or `disasmSimpleIO` if you plan on using the `defaultAction` rather than building your own. You define a `Disassembler` with the correct parameters that define the architecture and mode to use, plus the actual buffer of data that should be disassembled.

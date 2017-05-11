@@ -24,19 +24,18 @@ getArmOpMemStruct = do
     poke (plusPtr ptr 4) (fromIntegral $ fromEnum ArmRegQ12 :: Word32)
     poke (plusPtr ptr 8) (0x01324657 :: Int32)
     poke (plusPtr ptr 12) (0x02143657 :: Int32)
-    poke (plusPtr ptr 16) (0x7878abcd :: Int32)
     peek (castPtr ptr) <* free ptr
 
 armOpMemStruct :: ArmOpMemStruct
 armOpMemStruct =
-    ArmOpMemStruct ArmRegD15 ArmRegQ12 0x01324657 0x02143657 0x7878abcd
+    ArmOpMemStruct ArmRegD15 ArmRegQ12 0x01324657 0x02143657
 
 -- | ArmOpMemStruct spec
 armOpMemStructSpec :: Spec
 armOpMemStructSpec = describe "Storable ArmOpMemStruct" $ do
     it "is a packed struct" $
         sizeOf (undefined :: ArmOpMemStruct) ==
-            sizeOf (0 :: Word32) * 5
+            sizeOf (0 :: Word32) * 4
     it "has matching peek- and poke-implementations" $ property $
         \s@ArmOpMemStruct{} ->
             alloca (\p -> poke p s >> peek p) `shouldReturn` s

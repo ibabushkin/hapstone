@@ -68,7 +68,6 @@ data ArmOpMemStruct = ArmOpMemStruct
     , index :: ArmReg -- ^ index register
     , scale :: Int32 -- ^ scale for index register (1 or -1)
     , disp :: Int32 -- ^ displacement/offset value
-    , lshift :: Int32 -- ^ left shift on index register
     } deriving (Show, Eq)
 
 instance Storable ArmOpMemStruct where
@@ -79,13 +78,11 @@ instance Storable ArmOpMemStruct where
         <*> ((toEnum . fromIntegral) <$> {#get arm_op_mem->index#} p)
         <*> (fromIntegral <$> {#get arm_op_mem->scale#} p)
         <*> (fromIntegral <$> {#get arm_op_mem->disp#} p)
-        <*> (fromIntegral <$> {#get arm_op_mem->lshift#} p)
-    poke p (ArmOpMemStruct b i s d l) = do
+    poke p (ArmOpMemStruct b i s d) = do
         {#set arm_op_mem->base#} p (fromIntegral $ fromEnum b)
         {#set arm_op_mem->index#} p (fromIntegral $ fromEnum i)
         {#set arm_op_mem->scale#} p (fromIntegral s)
         {#set arm_op_mem->disp#} p (fromIntegral d)
-        {#set arm_op_mem->lshift#} p (fromIntegral l)
 
 -- | possible operand types (corresponding to the tagged union in the C header)
 data CsArmOpValue
