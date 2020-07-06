@@ -28,8 +28,10 @@ library
   build-depends:       base >= 4.7 && < 5
   default-language:    Haskell2010
   extra-libraries:     capstone
-  extra-lib-dirs:      /home/thewormkill/clones/forks/capstone/tests
-  include-dirs:        /home/thewormkill/clones/forks/capstone/include
+-- /home/thewormkill/clones/forks/capstone/tests
+  extra-lib-dirs:      /home/gregs/install/usr/local/lib
+-- /home/thewormkill/clones/forks/capstone/include
+  include-dirs:        /home/gregs/install/usr/local/include
   build-tools:         c2hs
 
 test-suite hapstone-test

@@ -44,7 +44,6 @@ getCsArm64Op = do
     ptr <- mallocArray (sizeOf csArm64Op) :: IO (Ptr Word8)
     poke (castPtr ptr) (0x01234567 :: Word32)
     poke (plusPtr ptr 4) (fromIntegral $ fromEnum Arm64Vas8b :: Int32)
-    poke (plusPtr ptr 8) (fromIntegral $ fromEnum Arm64VessB :: Int32)
     poke (plusPtr ptr 12) (fromIntegral $ fromEnum Arm64SftMsl :: Int32)
     poke (plusPtr ptr 16) (0x01234567 :: Word32)
     poke (plusPtr ptr 20) (fromIntegral $ fromEnum Arm64ExtUxtb :: Int32)
@@ -54,7 +53,7 @@ getCsArm64Op = do
     peek (castPtr ptr) <* free ptr
 
 csArm64Op :: CsArm64Op
-csArm64Op = CsArm64Op 0x01234567 Arm64Vas8b Arm64VessB
+csArm64Op = CsArm64Op 0x01234567 Arm64Vas8b 
     (Arm64SftMsl, 0x01234567) Arm64ExtUxtb (Imm 0x0123456789abcdef) 0x1
 
 csArm64OpSpec :: Spec
