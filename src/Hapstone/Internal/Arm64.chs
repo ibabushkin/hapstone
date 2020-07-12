@@ -43,8 +43,10 @@ import Foreign.C.Types
 {#enum arm64_sysreg as Arm64Sysreg {underscoreToCase}
     deriving (Show, Eq, Bounded)#}
 -- | more system registers
-{#enum arm64_msr_reg as Arm64MsrReg {underscoreToCase}
-    deriving (Show, Eq, Bounded)#}
+
+-- note that 'arm64_msr_reg' was '#if 0'ed out from capstone in commit 9d292268, "arm64: sync with LLVM 7.0.1" 2019April10
+-- {#enum arm64_msr_reg as Arm64MsrReg {underscoreToCase}
+--    deriving (Show, Eq, Bounded)#}
 
 -- | system pstate field (MSR instructions)
 {#enum arm64_pstate as Arm64Pstate {underscoreToCase}
@@ -54,8 +56,10 @@ import Foreign.C.Types
 {#enum arm64_vas as Arm64Vas {underscoreToCase}
     deriving (Show, Eq, Bounded)#}
 -- | vector element size specifier
-{#enum arm64_vess as Arm64Vess {underscoreToCase}
-    deriving (Show, Eq, Bounded)#}
+
+-- note that 'arm_64_vess' was removed from capstone in commit 9d292268, "arm64: sync with LLVM 7.0.1" 2019April10
+-- {#enum arm64_vess as Arm64Vess {underscoreToCase}
+--     deriving (Show, Eq, Bounded)#}
 
 -- | memory barrier operands
 {#enum arm64_barrier_op as Arm64BarrierOp {underscoreToCase}
@@ -121,11 +125,11 @@ data CsArm64OpValue
     | Undefined -- ^ invalid operand value, for 'Arm64OpInvalid' operand
     deriving (Show, Eq)
 
+-- note that 'vess' was removed from capstone in commit 9d292268, "arm64: sync with LLVM 7.0.1" 2019April10
 -- | instruction operand
 data CsArm64Op = CsArm64Op
     { vectorIndex :: Int32 -- ^ vector index for some vector operands, else -1
     , vas :: Arm64Vas -- ^ vector arrangement specifier
-    , vess :: Arm64Vess -- ^ vector element size specifier
     , shift :: (Arm64Shifter, Word32) -- ^ shifter type and value
     , ext :: Arm64Extender -- ^ extender type
     , value :: CsArm64OpValue -- ^ operand type and value
@@ -138,7 +142,6 @@ instance Storable CsArm64Op where
     peek p = CsArm64Op
         <$> (fromIntegral <$> {#get cs_arm64_op->vector_index#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm64_op->vas#} p)
-        <*> ((toEnum . fromIntegral) <$> {#get cs_arm64_op->vess#} p)
         <*> ((,) <$>
             ((toEnum . fromIntegral) <$> {#get cs_arm64_op->shift.type#} p) <*>
             (fromIntegral <$> {#get cs_arm64_op->shift.value#} p))
@@ -162,10 +165,9 @@ instance Storable CsArm64Op where
                  (peek bP :: IO CInt)
               _ -> return Undefined
         <*> (peekByteOff p 44 :: IO Word8) -- access
-    poke p (CsArm64Op vI va ve (sh, shV) ext val acc) = do
+    poke p (CsArm64Op vI va (sh, shV) ext val acc) = do
         {#set cs_arm64_op->vector_index#} p (fromIntegral vI)
         {#set cs_arm64_op->vas#} p (fromIntegral $ fromEnum va)
-        {#set cs_arm64_op->vess#} p (fromIntegral $ fromEnum ve)
         {#set cs_arm64_op->shift.type#} p (fromIntegral $ fromEnum sh)
         {#set cs_arm64_op->shift.value#} p (fromIntegral shV)
         {#set cs_arm64_op->ext#} p (fromIntegral $ fromEnum ext)
