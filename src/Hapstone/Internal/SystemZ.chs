@@ -63,7 +63,7 @@ instance Storable SysZOpMemStruct where
 
 -- | instruction operand
 data CsSysZOp
-    = Reg Word32 -- ^ register value for 'SyszOpReg' operands
+    = Reg SysZReg -- ^ register value for 'SyszOpReg' operands
     | Imm Int64 -- ^ immediate value for 'SyszOpImm' operands
     | Mem SysZOpMemStruct -- ^ base/index/length/disp value for 'SyszOpMem'
                           -- operands
@@ -72,29 +72,31 @@ data CsSysZOp
     deriving (Show, Eq)
 
 instance Storable CsSysZOp where
-    sizeOf _ = 32
-    alignment _ = 8
+    sizeOf _ = {#sizeof cs_sysz_op#}
+    alignment _ = {#alignof cs_sysz_op#}
     peek p = do
         t <- fromIntegral <$> {#get cs_sysz_op->type#} p
-        let bP = plusPtr p 8
+        let memP = plusPtr p {#offsetof cs_sysz_op->mem#}
         case toEnum t of
-          SyszOpReg -> Reg <$> peek bP
-          SyszOpImm -> Imm <$> peek bP
-          SyszOpMem -> Mem <$> peek bP
+          SyszOpReg -> (Reg . toEnum . fromIntegral) <$> {#get cs_sysz_op->reg#} p
+          SyszOpImm -> (Imm . fromIntegral) <$> {#get cs_sysz_op->reg#} p
+          SyszOpMem -> Mem <$> peek memP
           SyszOpAcreg -> return AcReg
           SyszOpInvalid -> return Undefined
     poke p op = do
-        let bP = plusPtr p 8
+        let regP = plusPtr p {#offsetof cs_sysz_op->reg#}
+            immP = plusPtr p {#offsetof cs_sysz_op->imm#}
+            memP = plusPtr p {#offsetof cs_sysz_op->mem#}
             setType = {#set cs_sysz_op->type#} p . fromIntegral . fromEnum
         case op of
           Reg r -> do
-              poke bP (fromIntegral $ fromEnum r :: CInt)
+              poke regP (fromIntegral $ fromEnum r :: CInt)
               setType SyszOpReg
           Imm i -> do
-              poke bP i
+              poke immP i
               setType SyszOpImm
           Mem m -> do
-              poke bP m
+              poke memP m
               setType SyszOpMem
           AcReg -> setType SyszOpAcreg
           _ -> setType SyszOpInvalid
@@ -109,8 +111,8 @@ data CsSysZ = CsSysZ
     } deriving (Show, Eq)
 
 instance Storable CsSysZ where
-    sizeOf _ = 200
-    alignment _ = 8
+    sizeOf _ = {#sizeof cs_sysz#}
+    alignment _ = {#alignof cs_sysz#}
     peek p = CsSysZ
         <$> ((toEnum . fromIntegral) <$> {#get cs_sysz->cc#} p)
         <*> do num <- fromIntegral <$> {#get cs_sysz->op_count#} p

@@ -44,7 +44,7 @@ import Foreign.C.Types
 
 -- | memory access operands
 -- associated with 'Ppc64OpMem' operand type
-data PpcOpMemStruct = PpcOpMemStruct 
+data PpcOpMemStruct = PpcOpMemStruct
     { base :: PpcReg -- ^ base register
     , disp :: Int32 -- ^ displacement/offset value
     } deriving (Show, Eq)
@@ -82,44 +82,48 @@ instance Storable PpcOpCrxStruct where
 -- | instruction operands
 data CsPpcOp
     = Reg PpcReg -- ^ register value for 'PpcOpReg' operands
-    | Imm Int32 -- ^ immediate value for 'PpcOpImm' operands
+    | Imm Int64 -- ^ immediate value for 'PpcOpImm' operands
     | Mem PpcOpMemStruct -- ^ base/disp value for 'PpcOpMem' operands
     | Crx PpcOpCrxStruct -- ^ operand with condition register
     | Undefined -- ^ invalid operand value, for 'PpcOpInvalid' operand
     deriving (Show, Eq)
 
 instance Storable CsPpcOp where
-    sizeOf _ = 16
-    alignment _ = 4
+    sizeOf _ = {#sizeof cs_ppc_op#}
+    alignment _ = {#alignof cs_ppc_op#}
     peek p = do
         t <- fromIntegral <$> {#get cs_ppc_op->type#} p
-        let bP = plusPtr p 4
+        let memP = plusPtr p {#offsetof cs_ppc_op->mem#}
+            crxP = plusPtr p {#offsetof cs_ppc_op->crx#}
         case toEnum t of
-          PpcOpReg -> (Reg . toEnum . fromIntegral) <$> (peek bP :: IO CInt)
-          PpcOpImm -> Imm <$> peek bP
-          PpcOpMem -> Mem <$> peek bP
-          PpcOpCrx -> Crx <$> peek bP
+          PpcOpReg -> (Reg . toEnum . fromIntegral) <$> {#get cs_ppc_op->reg#} p
+          PpcOpImm -> (Imm . fromIntegral) <$> {#get cs_ppc_op->imm#} p
+          PpcOpMem -> Mem <$> peek memP
+          PpcOpCrx -> Crx <$> peek crxP
           _ -> return Undefined
     poke p op = do
-        let bP = plusPtr p 4
+        let regP = plusPtr p {#offsetof cs_ppc_op->reg#}
+            immP = plusPtr p {#offsetof cs_ppc_op->imm#}
+            memP = plusPtr p {#offsetof cs_ppc_op->mem#}
+            crxP = plusPtr p {#offsetof cs_ppc_op->crx#}
             setType = {#set cs_ppc_op->type#} p . fromIntegral . fromEnum
         case op of
           Reg r -> do
-              poke bP (fromIntegral $ fromEnum r :: CInt)
+              poke regP (fromIntegral $ fromEnum r :: CInt)
               setType PpcOpReg
           Imm i -> do
-              poke bP i
+              poke immP i
               setType PpcOpImm
           Mem m -> do
-              poke bP m
+              poke memP m
               setType PpcOpMem
           Crx c -> do
-              poke bP c
+              poke crxP c
               setType PpcOpCrx
           _ -> setType PpcOpInvalid
 
 -- | instruction datatype
-data CsPpc = CsPpc 
+data CsPpc = CsPpc
     { bc :: PpcBc -- ^ branch code for branch instructions
     , bh :: PpcBh -- ^ branch hint for branch instructions
     , updateCr0 :: Bool -- ^ does this instruction update CR0?
@@ -130,19 +134,19 @@ data CsPpc = CsPpc
     } deriving (Show, Eq)
 
 instance Storable CsPpc where
-    sizeOf _ = 140
-    alignment _ = 4
+    sizeOf _ = {#sizeof cs_ppc#}
+    alignment _ = {#alignof cs_ppc#}
     peek p = CsPpc
         <$> ((toEnum . fromIntegral) <$> {#get cs_ppc->bc#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_ppc->bh#} p)
-        <*> (toBool <$> (peekByteOff p 8 :: IO Word8)) -- update_cr0
+        <*> (toBool <$> (peekByteOff p {#offsetof cs_ppc->update_cr0#} :: IO Word8))
         <*> do num <- fromIntegral <$> {#get cs_ppc->op_count#} p
                let ptr = plusPtr p {#offsetof cs_ppc.operands#}
                peekArray num ptr
     poke p (CsPpc bc bh u o) = do
         {#set cs_ppc->bc#} p (fromIntegral $ fromEnum bc)
         {#set cs_ppc->bh#} p (fromIntegral $ fromEnum bh)
-        pokeByteOff p 8 (fromBool u :: Word8) -- update_cr0
+        {#set cs_ppc->update_cr0#} p u
         {#set cs_ppc->op_count#} p (fromIntegral $ length o)
         if length o > 8
            then error "operands overflew 8 elements"

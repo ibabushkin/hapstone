@@ -68,24 +68,26 @@ data CsXCoreOp
     deriving (Show, Eq)
 
 instance Storable CsXCoreOp where
-    sizeOf _ = 16
-    alignment _ = 4
+    sizeOf _ = {#sizeof cs_xcore_op#}
+    alignment _ = {#alignof cs_xcore_op#}
     peek p = do
         t <- fromIntegral <$> {#get cs_xcore_op->type#} p
-        let bP = plusPtr p 4
+        let memP = plusPtr p {#offsetof cs_xcore_op->mem#}
         case toEnum t of
-          XcoreOpReg -> (Reg . toEnum . fromIntegral) <$> (peek bP :: IO Int32)
-          XcoreOpImm -> Imm <$> peek bP
-          XcoreOpMem -> Mem <$> peek bP
+          XcoreOpReg -> (Reg . toEnum . fromIntegral) <$> {#get cs_xcore_op->reg#} p
+          XcoreOpImm -> (Imm . fromIntegral) <$> {#get cs_xcore_op->imm#} p
+          XcoreOpMem -> Mem <$> peek memP
           _ -> return Undefined
     poke p op = do
-        let bP = plusPtr p 4
+        let regP = plusPtr p {#offsetof cs_xcore_op->reg#}
+            immP = plusPtr p {#offsetof cs_xcore_op->imm#}
+            memP = plusPtr p {#offsetof cs_xcore_op->mem#}
             setType = {#set cs_xcore_op->type#} p . fromIntegral . fromEnum
         case op of
-          Reg r -> do poke bP (fromIntegral $ fromEnum r :: Int32)
+          Reg r -> do poke regP (fromIntegral $ fromEnum r :: Int32)
                       setType XcoreOpReg
-          Imm i -> poke bP i >> setType XcoreOpImm
-          Mem m -> poke bP m >> setType XcoreOpMem
+          Imm i -> poke immP i >> setType XcoreOpImm
+          Mem m -> poke memP m >> setType XcoreOpMem
           _ -> setType XcoreOpInvalid
 
 -- | instruction datatype
@@ -97,8 +99,8 @@ newtype CsXCore = CsXCore [CsXCoreOp] -- ^ operand list of this instruction,
     deriving (Show, Eq)
 
 instance Storable CsXCore where
-    sizeOf _ = 132
-    alignment _ = 4
+    sizeOf _ = {#sizeof cs_xcore#}
+    alignment _ = {#alignof cs_xcore#}
     peek p = do
         num <- fromIntegral <$> {#get cs_xcore->op_count#} p
         CsXCore <$> peekArray num (plusPtr p {#offsetof cs_xcore.operands#})

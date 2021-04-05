@@ -24,7 +24,11 @@ library
                        Hapstone.Internal.Sparc,
                        Hapstone.Internal.SystemZ,
                        Hapstone.Internal.X86,
-                       Hapstone.Internal.XCore
+                       Hapstone.Internal.XCore,
+                       Hapstone.Internal.Evm,
+                       Hapstone.Internal.M680x,
+                       Hapstone.Internal.M68k,
+                       Hapstone.Internal.Tms320c64x
   build-depends:       base >= 4.7 && < 5
   default-language:    Haskell2010
   extra-libraries:     capstone
@@ -52,6 +56,14 @@ test-suite hapstone-test
                        Internal.X86.Default,
                        Internal.XCore.StorableSpec,
                        Internal.XCore.Default,
+                       Internal.Evm.StorableSpec,
+                       Internal.Evm.Default,
+                       Internal.M680x.StorableSpec,
+                       Internal.M680x.Default,
+                       Internal.M68k.StorableSpec,
+                       Internal.M68k.Default,
+                       Internal.Tms320c64x.StorableSpec,
+                       Internal.Tms320c64x.Default,
                        Internal.CapstoneSpec,
                        Internal.Default
   build-depends:       base,

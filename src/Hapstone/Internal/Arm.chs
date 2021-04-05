@@ -24,8 +24,11 @@ module Hapstone.Internal.Arm where
 
 {#context lib = "capstone"#}
 
+import Data.Maybe (fromMaybe)
 import Foreign
 import Foreign.C.Types
+
+import Hapstone.Internal.Util
 
 -- | ARM shift type
 {#enum arm_shifter as ArmShifter {underscoreToCase}
@@ -68,6 +71,7 @@ data ArmOpMemStruct = ArmOpMemStruct
     , index :: ArmReg -- ^ index register
     , scale :: Int32 -- ^ scale for index register (1 or -1)
     , disp :: Int32 -- ^ displacement/offset value
+    , lshift :: Maybe Int32 -- ^ left shift
     } deriving (Show, Eq)
 
 instance Storable ArmOpMemStruct where
@@ -78,19 +82,21 @@ instance Storable ArmOpMemStruct where
         <*> ((toEnum . fromIntegral) <$> {#get arm_op_mem->index#} p)
         <*> (fromIntegral <$> {#get arm_op_mem->scale#} p)
         <*> (fromIntegral <$> {#get arm_op_mem->disp#} p)
-    poke p (ArmOpMemStruct b i s d) = do
+        <*> (fromZero . fromIntegral <$> {#get arm_op_mem->lshift#} p)
+    poke p (ArmOpMemStruct b i s d l) = do
         {#set arm_op_mem->base#} p (fromIntegral $ fromEnum b)
         {#set arm_op_mem->index#} p (fromIntegral $ fromEnum i)
         {#set arm_op_mem->scale#} p (fromIntegral s)
         {#set arm_op_mem->disp#} p (fromIntegral d)
+        {#set arm_op_mem->lshift#} p (fromIntegral $ fromMaybe 0 l)
 
 -- | possible operand types (corresponding to the tagged union in the C header)
 data CsArmOpValue
-    = Reg Word32 -- ^ register value for 'ArmOpReg' operands
-    | Sysreg Word32 -- ^ register value for 'ArmOpSysreg' operands
+    = Reg Int32 -- ^ register value for 'ArmOpReg' operands
+    | Sysreg Int32 -- ^ register value for 'ArmOpSysreg' operands
     | Imm Int32 -- ^ immediate value for 'ArmOpImm' operands
-    | Cimm Int32 -- ^ immediate value for 'ArmOpCimm' operands
-    | Pimm Int32 -- ^ immediate value for 'ArmOpPimm' operands
+    | CImm Int32 -- ^ immediate value for 'ArmOpCimm' operands
+    | PImm Int32 -- ^ immediate value for 'ArmOpPimm' operands
     | Fp Double -- ^ floating point value for 'ArmOpFp' operands
     | Mem ArmOpMemStruct -- ^ base,index,scale,disp value for
                          -- 'ArmOpMem' operands
@@ -109,8 +115,8 @@ data CsArmOp = CsArmOp
     } deriving (Show, Eq)
 
 instance Storable CsArmOp where
-    sizeOf _ = 40
-    alignment _ = 8
+    sizeOf _ = {#sizeof cs_arm_op#}
+    alignment _ = {#alignof cs_arm_op#}
     peek p = CsArmOp
         <$> (fromIntegral <$> {#get cs_arm_op->vector_index#} p)
         <*> ((,) <$>
@@ -118,56 +124,59 @@ instance Storable CsArmOp where
             (fromIntegral <$> {#get cs_arm_op->shift.value#} p))
         <*> do
             t <- fromIntegral <$> {#get cs_arm_op->type#} p :: IO Int
-            let bP = plusPtr p 16
+            let memP = plusPtr p {#offsetof cs_arm_op->mem#}
             case toEnum t of
-              ArmOpReg -> (Reg . fromIntegral) <$> (peek bP :: IO CUInt)
-              ArmOpSysreg -> (Sysreg . fromIntegral) <$> (peek bP :: IO CUInt)
-              ArmOpImm -> (Imm . fromIntegral) <$> (peek bP :: IO CInt)
-              ArmOpCimm -> (Cimm . fromIntegral) <$> (peek bP :: IO CInt)
-              ArmOpPimm -> (Pimm . fromIntegral) <$> (peek bP :: IO CInt)
-              ArmOpFp -> (Fp . realToFrac) <$> (peek bP :: IO CDouble)
-              ArmOpMem -> Mem <$> (peek bP :: IO ArmOpMemStruct)
-              ArmOpSetend -> (Setend . toEnum . fromIntegral) <$>
-                  (peek bP :: IO CInt)
+              ArmOpReg -> (Reg . fromIntegral) <$> {#get cs_arm_op->reg#} p
+              ArmOpSysreg -> (Sysreg . fromIntegral) <$> {#get cs_arm_op->reg#} p
+              ArmOpImm -> (Imm . fromIntegral) <$> {#get cs_arm_op->imm#} p
+              ArmOpCimm -> (CImm . fromIntegral) <$> {#get cs_arm_op->imm#} p
+              ArmOpPimm -> (PImm . fromIntegral) <$> {#get cs_arm_op->imm#} p
+              ArmOpFp -> (Fp . realToFrac) <$> {#get cs_arm_op->fp#} p
+              ArmOpMem -> Mem <$> (peek memP)
+              ArmOpSetend -> (Setend . toEnum . fromIntegral) <$> {#get cs_arm_op->setend#} p
               _ -> return Undefined
-        <*> (toBool <$> (peekByteOff p 36 :: IO Word8)) -- subtracted
-        <*> (peekByteOff p 37 :: IO Word8) -- access
-        <*> (peekByteOff p 38 :: IO Int8) -- neon_lane
+        <*> (toBool <$> (peekByteOff p {#offsetof cs_arm_op->subtracted#} :: IO Word8))
+        <*> (fromIntegral <$> {#get cs_arm_op->access#} p)
+        <*> (fromIntegral <$> {#get cs_arm_op->neon_lane#} p)
     poke p (CsArmOp vI (sh, shV) val sub acc neon) = do
         {#set cs_arm_op->vector_index#} p (fromIntegral vI)
         {#set cs_arm_op->shift.type#} p (fromIntegral $ fromEnum sh)
         {#set cs_arm_op->shift.value#} p (fromIntegral shV)
-        let bP = plusPtr p 16
+        let regP = plusPtr p {#offsetof cs_arm_op->reg#}
+            immP = plusPtr p {#offsetof cs_arm_op->imm#}
+            fpP = plusPtr p {#offsetof cs_arm_op->fp#}
+            memP = plusPtr p {#offsetof cs_arm_op->mem#}
+            setendP = plusPtr p {#offsetof cs_arm_op->setend#}
             setType = {#set cs_arm_op->type#} p . fromIntegral . fromEnum
         case val of
           Reg r -> do
-              poke bP (fromIntegral r :: CUInt)
+              poke regP (fromIntegral r :: CUInt)
               setType ArmOpReg
           Sysreg r -> do
-              poke bP (fromIntegral r :: CUInt)
+              poke regP (fromIntegral r :: CUInt)
               setType ArmOpSysreg
           Imm i -> do
-              poke bP (fromIntegral i :: CInt)
+              poke immP (fromIntegral i :: CInt)
               setType ArmOpImm
-          Cimm i -> do
-              poke bP (fromIntegral i :: CInt)
+          CImm i -> do
+              poke immP (fromIntegral i :: CInt)
               setType ArmOpCimm
-          Pimm i -> do
-              poke bP (fromIntegral i :: CInt)
+          PImm i -> do
+              poke immP (fromIntegral i :: CInt)
               setType ArmOpPimm
           Fp f -> do
-              poke bP (realToFrac f :: CDouble)
+              poke fpP (realToFrac f :: CDouble)
               setType ArmOpFp
           Mem m -> do
-              poke bP m
+              poke memP m
               setType ArmOpMem
           Setend s -> do
-              poke bP (fromIntegral $ fromEnum s :: CInt)
+              poke setendP (fromIntegral $ fromEnum s :: CInt)
               setType ArmOpSetend
           _ -> setType ArmOpInvalid
-        pokeByteOff p 36 (fromBool sub :: Word8) -- subtracted
-        pokeByteOff p 37 acc -- access
-        pokeByteOff p 38 neon -- neon_lane
+        {#set cs_arm_op->subtracted#} p sub
+        {#set cs_arm_op->access#} p $ fromIntegral acc
+        {#set cs_arm_op->neon_lane#} p $ fromIntegral neon
 
 -- | instruction datatype
 data CsArm = CsArm
@@ -190,35 +199,35 @@ data CsArm = CsArm
     } deriving (Show, Eq)
 
 instance Storable CsArm where
-    sizeOf _ = 1480
-    alignment _ = 8
+    sizeOf _ = {#sizeof cs_arm#}
+    alignment _ = {#alignof cs_arm#}
     peek p = CsArm
-        <$> (toBool <$> (peekByteOff p 0 :: IO Word8)) -- usermode
+        <$> (toBool <$> (peekByteOff p {#offsetof cs_arm->usermode#} :: IO Word8))
         <*> (fromIntegral <$> {#get cs_arm->vector_size#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm->vector_data#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm->cps_mode#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm->cps_flag#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm->cc#} p)
-        <*> (toBool <$> (peekByteOff p 24 :: IO Word8)) -- update_flags
-        <*> (toBool <$> (peekByteOff p 25 :: IO Word8)) -- writeback
+        <*> (toBool <$> (peekByteOff p {#offsetof cs_arm->update_flags#} :: IO Word8))
+        <*> (toBool <$> (peekByteOff p {#offsetof cs_arm->writeback#} :: IO Word8))
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm->mem_barrier#} p)
         <*> do num <- fromIntegral <$> {#get cs_arm->op_count#} p
-               let ptr = plusPtr p 40
+               let ptr = plusPtr p {#offsetof cs_arm->operands#}
                peekArray num ptr
     poke p (CsArm u vS vD cM cF cc uF w m o) = do
-        pokeByteOff p 0 (fromBool u :: Word8) -- usermode
+        {#set cs_arm->usermode#} p u
         {#set cs_arm->vector_size#} p (fromIntegral vS)
         {#set cs_arm->vector_data#} p (fromIntegral $ fromEnum vD)
         {#set cs_arm->cps_mode#} p (fromIntegral $ fromEnum cM)
         {#set cs_arm->cps_flag#} p (fromIntegral $ fromEnum cF)
         {#set cs_arm->cc#} p (fromIntegral $ fromEnum cc)
-        pokeByteOff p 24 (fromBool uF :: Word8) -- update_flags
-        pokeByteOff p 25 (fromBool w :: Word8) -- writeback
+        {#set cs_arm->update_flags#} p uF
+        {#set cs_arm->writeback#} p w
         {#set cs_arm->mem_barrier#} p (fromIntegral $ fromEnum m)
         {#set cs_arm->op_count#} p (fromIntegral $ length o)
         if length o > 36
            then error "operands overflew 36 elements"
-           else pokeArray (plusPtr p 40) o
+           else pokeArray (plusPtr p {#offsetof cs_arm->operands#}) o
 
 -- | ARM instructions
 {#enum arm_insn as ArmInsn {underscoreToCase}

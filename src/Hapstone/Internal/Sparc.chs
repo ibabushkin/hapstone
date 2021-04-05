@@ -64,35 +64,37 @@ instance Storable SparcOpMemStruct where
 
 -- | instruction operand
 data CsSparcOp
-    = Reg Word32 -- ^ register value for 'SparcOpReg' operands
-    | Imm Int32 -- ^ immediate value for 'SparcOpImm' operands
+    = Reg SparcOpType -- ^ register value for 'SparcOpReg' operands
+    | Imm Int64 -- ^ immediate value for 'SparcOpImm' operands
     | Mem SparcOpMemStruct -- ^ base,index,disp value for 'SparcOpMem' operands
     | Undefined -- ^ invalid operand value, for 'SparcOpInvalid' operand
     deriving (Show, Eq)
 
 instance Storable CsSparcOp where
-    sizeOf _ = 12
-    alignment _ = 4
+    sizeOf _ = {#sizeof cs_sparc_op#}
+    alignment _ = {#alignof cs_sparc_op#}
     peek p = do
         t <- fromIntegral <$> ({#get cs_sparc_op->type#} p :: IO CInt)
-        let bP = plusPtr p 4
+        let memP = plusPtr p {#offsetof cs_sparc_op->mem#}
         case toEnum t of
-          SparcOpReg -> Reg <$> peek bP
-          SparcOpImm -> Imm <$> peek bP
-          SparcOpMem -> Mem <$> peek bP
+          SparcOpReg -> (Reg . toEnum . fromIntegral) <$> {#get cs_sparc_op->reg#} p
+          SparcOpImm -> (Imm . fromIntegral) <$> {#get cs_sparc_op->imm#} p
+          SparcOpMem -> Mem <$> peek memP
           _ -> return Undefined
     poke p op = do
-        let bP = plusPtr p 4
+        let regP = plusPtr p {#offsetof cs_sparc_op->reg#}
+            immP = plusPtr p {#offsetof cs_sparc_op->imm#}
+            memP = plusPtr p {#offsetof cs_sparc_op->mem#}
             setType = {#set cs_sparc_op->type#} p . fromIntegral . fromEnum
         case op of
           Reg r -> do
-              poke bP (fromIntegral $ fromEnum r :: CInt)
+              poke regP (fromIntegral $ fromEnum r :: CInt)
               setType SparcOpReg
           Imm i -> do
-              poke bP i
+              poke immP i
               setType SparcOpImm
           Mem m -> do
-              poke bP m
+              poke memP m
               setType SparcOpMem
           _ -> setType SparcOpInvalid
 
@@ -107,8 +109,8 @@ data CsSparc = CsSparc
     } deriving (Show, Eq)
 
 instance Storable CsSparc where
-    sizeOf _ = 60
-    alignment _ = 4
+    sizeOf _ = {#sizeof cs_sparc#}
+    alignment _ = {#alignof cs_sparc#}
     peek p = CsSparc
         <$> ((toEnum . fromIntegral) <$> {#get cs_sparc->cc#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_sparc->hint#} p)

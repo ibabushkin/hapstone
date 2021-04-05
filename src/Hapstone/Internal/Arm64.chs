@@ -98,11 +98,11 @@ instance Storable Arm64OpMemStruct where
     peek p = Arm64OpMemStruct
         <$> ((toEnum . fromIntegral) <$> {#get arm64_op_mem->base#} p)
         <*> ((toEnum . fromIntegral) <$> {#get arm64_op_mem->index#} p)
-        <*> ((toEnum . fromIntegral) <$> {#get arm64_op_mem->disp#} p)
+        <*> (fromIntegral <$> {#get arm64_op_mem->disp#} p)
     poke p (Arm64OpMemStruct b i d) = do
         {#set arm64_op_mem->base#} p (fromIntegral $ fromEnum b)
         {#set arm64_op_mem->index#} p (fromIntegral $ fromEnum i)
-        {#set arm64_op_mem->disp#} p (fromIntegral $ fromEnum d)
+        {#set arm64_op_mem->disp#} p (fromIntegral d)
 
 -- | possible operand types (corresponding to the tagged union in the C header)
 data CsArm64OpValue
@@ -133,35 +133,34 @@ data CsArm64Op = CsArm64Op
     } deriving (Show, Eq)
 
 instance Storable CsArm64Op where
-    sizeOf _ = 48
-    alignment _ = 8
+    sizeOf _ = {#sizeof cs_arm64_op#}
+    alignment _ = {#alignof cs_arm64_op#}
     peek p = CsArm64Op
         <$> (fromIntegral <$> {#get cs_arm64_op->vector_index#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm64_op->vas#} p)
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm64_op->vess#} p)
-        <*> ((,) <$>
-            ((toEnum . fromIntegral) <$> {#get cs_arm64_op->shift.type#} p) <*>
-            (fromIntegral <$> {#get cs_arm64_op->shift.value#} p))
+        <*> ((,)
+            <$> ((toEnum . fromIntegral) <$> {#get cs_arm64_op->shift.type#} p)
+            <*> (fromIntegral <$> {#get cs_arm64_op->shift.value#} p))
         <*> ((toEnum . fromIntegral) <$> {#get cs_arm64_op->ext#} p)
         <*> do
             t <- fromIntegral <$> {#get cs_arm64_op->type#} p
-            let bP = plusPtr p 32
+            let memP = plusPtr p {#offsetof cs_arm64_op->mem#}
             case toEnum t of
-              Arm64OpReg -> (Reg . toEnum . fromIntegral) <$>
-                  (peek bP :: IO CUInt)
-              Arm64OpImm -> (Imm . fromIntegral) <$> (peek bP :: IO Int64)
-              Arm64OpCimm -> (CImm . fromIntegral) <$> (peek bP :: IO Int64)
-              Arm64OpFp -> (Fp . realToFrac) <$> (peek bP :: IO CDouble)
-              Arm64OpMem -> Mem <$> peek bP
-              Arm64OpRegMsr -> (Pstate . toEnum . fromIntegral) <$>
-                 (peek bP :: IO CInt)
-              Arm64OpSys -> (Sys . fromIntegral) <$> (peek bP :: IO CUInt)
-              Arm64OpPrefetch -> (Prefetch . toEnum . fromIntegral) <$>
-                 (peek bP :: IO CInt)
-              Arm64OpBarrier -> (Barrier . toEnum . fromIntegral) <$>
-                 (peek bP :: IO CInt)
+              Arm64OpReg -> (Reg . toEnum . fromIntegral) <$> {#get cs_arm64_op->reg#} p
+              Arm64OpImm -> (Imm . fromIntegral) <$> {#get cs_arm64_op->imm#} p
+              Arm64OpCimm -> (CImm . fromIntegral) <$> {#get cs_arm64_op->imm#} p
+              Arm64OpFp -> (Fp . realToFrac) <$> {#get cs_arm64_op->fp#} p
+              Arm64OpMem -> Mem <$> (peek memP)
+              -- TODO: arm64_op_type has 3 fields Pstate/RegMsr/RegMrs, the old code was using Msr to set Pstate
+              Arm64OpPstate -> (Pstate . toEnum . fromIntegral) <$> {#get cs_arm64_op->pstate#} p
+              -- Arm64OpRegMsr -> (Pstate . toEnum . fromIntegral) <$> {#get cs_arm64_op->pstate#}
+              -- Arm64OpRegMrs -> (Pstate . toEnum . fromIntegral) <$> {#get cs_arm64_op->pstate#}
+              Arm64OpSys -> (Sys . fromIntegral) <$> {#get cs_arm64_op->sys#} p
+              Arm64OpPrefetch -> (Prefetch . toEnum . fromIntegral) <$> {#get cs_arm64_op->prefetch#} p
+              Arm64OpBarrier -> (Barrier . toEnum . fromIntegral) <$> {#get cs_arm64_op->barrier#} p
               _ -> return Undefined
-        <*> (peekByteOff p 44 :: IO Word8) -- access
+        <*> (fromIntegral <$> {#get cs_arm64_op->access#} p)
     poke p (CsArm64Op vI va ve (sh, shV) ext val acc) = do
         {#set cs_arm64_op->vector_index#} p (fromIntegral vI)
         {#set cs_arm64_op->vas#} p (fromIntegral $ fromEnum va)
@@ -169,38 +168,45 @@ instance Storable CsArm64Op where
         {#set cs_arm64_op->shift.type#} p (fromIntegral $ fromEnum sh)
         {#set cs_arm64_op->shift.value#} p (fromIntegral shV)
         {#set cs_arm64_op->ext#} p (fromIntegral $ fromEnum ext)
-        let bP = plusPtr p 32
+        let regP = plusPtr p {#offsetof cs_arm64_op->reg#}
+            immP = plusPtr p {#offsetof cs_arm64_op->imm#}
+            fpP = plusPtr p {#offsetof cs_arm64_op->fp#}
+            memP = plusPtr p {#offsetof cs_arm64_op->mem#}
+            pstateP = plusPtr p {#offsetof cs_arm64_op->pstate#}
+            sysP = plusPtr p {#offsetof cs_arm64_op->sys#}
+            prefetchP = plusPtr p {#offsetof cs_arm64_op->prefetch#}
+            barrierP = plusPtr p {#offsetof cs_arm64_op->barrier#}
             setType = {#set cs_arm64_op->type#} p . fromIntegral . fromEnum
         case val of
           Reg r -> do
-              poke bP (fromIntegral $ fromEnum r :: CUInt)
+              poke regP (fromIntegral $ fromEnum r :: CUInt)
               setType Arm64OpReg
           Imm i -> do
-              poke bP (fromIntegral i :: Int64)
+              poke immP (fromIntegral i :: Int64)
               setType Arm64OpImm
           CImm i -> do
-              poke bP (fromIntegral i :: Int64)
+              poke immP (fromIntegral i :: Int64)
               setType Arm64OpCimm
           Fp f -> do
-              poke bP (realToFrac f :: CDouble)
+              poke fpP (realToFrac f :: CDouble)
               setType Arm64OpFp
           Mem m -> do
-              poke bP m
+              poke memP m
               setType Arm64OpMem
           Pstate p -> do
-              poke bP (fromIntegral $ fromEnum p :: CInt)
+              poke pstateP (fromIntegral $ fromEnum p :: CInt)
               setType Arm64OpRegMsr
           Sys s -> do
-              poke bP (fromIntegral s :: CUInt)
+              poke sysP (fromIntegral s :: CUInt)
               setType Arm64OpSys
           Prefetch p -> do
-              poke bP (fromIntegral $ fromEnum p :: CInt)
+              poke prefetchP (fromIntegral $ fromEnum p :: CInt)
               setType Arm64OpPrefetch
           Barrier b -> do
-              poke bP (fromIntegral $ fromEnum b :: CInt)
+              poke barrierP (fromIntegral $ fromEnum b :: CInt)
               setType Arm64OpBarrier
           _ -> setType Arm64OpInvalid
-        pokeByteOff p 44 acc
+        {#set cs_arm64_op->access#} p $ fromIntegral acc
 
 -- | instruction datatype
 data CsArm64 = CsArm64
@@ -214,19 +220,19 @@ data CsArm64 = CsArm64
     } deriving (Show, Eq)
 
 instance Storable CsArm64 where
-    sizeOf _ = 392
-    alignment _ = 12
+    sizeOf _ = {#sizeof cs_arm64#}
+    alignment _ = {#alignof cs_arm64#}
     peek p = CsArm64
         <$> (toEnum . fromIntegral <$> {#get cs_arm64->cc#} p)
-        <*> (toBool <$> (peekByteOff p 4 :: IO Word8)) -- update_flags
-        <*> (toBool <$> (peekByteOff p 5 :: IO Word8)) -- writeback
+        <*> (toBool <$> (peekByteOff p {#offsetof cs_arm64->update_flags#} :: IO Word8))
+        <*> (toBool <$> (peekByteOff p {#offsetof cs_arm64->writeback#} :: IO Word8))
         <*> do num <- fromIntegral <$> {#get cs_arm64->op_count#} p
                let ptr = plusPtr p {#offsetof cs_arm64.operands#}
                peekArray num ptr
     poke p (CsArm64 cc uF w o) = do
         {#set cs_arm64->cc#} p (fromIntegral $ fromEnum cc)
-        pokeByteOff p 4 (fromBool uF :: Word8) -- update_flags
-        pokeByteOff p 5 (fromBool w :: Word8) -- writeback
+        {#set cs_arm64->update_flags#} p uF
+        {#set cs_arm64->writeback#} p w
         {#set cs_arm64->op_count#} p (fromIntegral $ length o)
         if length o > 8
            then error "operands overflew 8 elements"

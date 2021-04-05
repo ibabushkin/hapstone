@@ -1,14 +1,16 @@
 # For more information, see: http://docs.haskellstack.org/en/stable/yaml_configuration.html
 
 # Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: lts-8.13
+resolver: lts-15.10
 
 # Local packages, usually specified by relative directory name
 packages:
 - '.'
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
-extra-deps: []
+extra-deps:
+- git: https://github.com/haskell/c2hs
+  commit: e64e0b2de00c9566e1dd832d9a9b8285b80669ee
 
 # Override default flag values for local packages and extra-deps
 flags: {}
